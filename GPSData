@@ -1,0 +1,28 @@
+    public class GPSPosition
+    {
+        public double Latitude { get; set; }
+        public double Longitude { get; set; }
+        public TimeSpan Time { get; set; }
+        public double Elevation { get; set; }
+
+        public GPSPosition(GPSPosition incoming)
+        {
+            this.Time = incoming.Time;
+            this.Latitude = incoming.Latitude;
+            this.Longitude = incoming.Longitude;
+            this.Elevation = incoming.Elevation;
+        }
+
+        public GPSPosition(TimeSpan time, double latit, double longit, double elevation)
+        {
+            this.Time = time;
+            this.Latitude = latit;
+            this.Longitude = longit;
+            this.Elevation = elevation;
+        }
+
+        public override string ToString()
+        {
+            return $"GPS Data: \nTime: {Time}\nLatitude: {Latitude}\nLongitude: {Longitude}\nElevation: {Elevation}";
+        }
+    }
