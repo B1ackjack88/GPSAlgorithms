@@ -1,0 +1,107 @@
+    public static class GPSCalculations
+    {
+        const double EARTH_RADIUS_IN_KILOMETERS = 6371;
+
+        public static double DistanceBetweenPointsKM(GPSPosition firstPoint, GPSPosition secondPoint)
+        {
+            double changeInLattitude = DegreesToRads(secondPoint.Latitude - firstPoint.Latitude);
+            double changeInLongitude = DegreesToRads(secondPoint.Longitude - firstPoint.Longitude);
+
+            double HeavyMath = Math.Sin(changeInLattitude / 2) * Math.Sin(changeInLattitude / 2) +
+                               Math.Cos(DegreesToRads(firstPoint.Latitude)) * Math.Cos(DegreesToRads(secondPoint.Latitude)) * 
+                               Math.Sin(changeInLongitude / 2) * Math.Sin(changeInLongitude / 2);
+            double smallerMath = 2 * Math.Atan2(Math.Sqrt(HeavyMath), Math.Sqrt(1 - HeavyMath));
+            
+            return EARTH_RADIUS_IN_KILOMETERS * smallerMath;
+        }
+
+        public static double DistanceBetweenPointsM(GPSPosition firstPoint, GPSPosition secondPoint)
+        {
+            return DistanceBetweenPointsKM(firstPoint, secondPoint) * 1000;
+        }
+
+        public static double DistanceBetweenPointsVincenty(GPSPosition firstPoint, GPSPosition secondPoint)
+        {
+            double LAMBDA_TARGET = Math.Pow(10, -12); // corresponds to 0.06mm of accuracy.
+
+            // using WGS-84 
+            const double SEMI_MAJOR_AXIS = 6378137.0;
+            const double SEMI_MINOR_AXIS = 6356752.314245;
+            const double FLATTENING_OF_ELLIPSOID = 1 / 298.257223563;
+
+            
+
+            double lattitude1 = DegreesToRads(firstPoint.Latitude);
+            double lattitude2 = DegreesToRads(secondPoint.Latitude);
+
+            double reducedLat1 = Math.Atan((1 - FLATTENING_OF_ELLIPSOID) * Math.Tan(lattitude1));
+            double reducedLat2 = Math.Atan((1 - FLATTENING_OF_ELLIPSOID) * Math.Tan(lattitude2));
+
+            double longitude1 = DegreesToRads(firstPoint.Longitude);
+            double longitude2 = DegreesToRads(secondPoint.Longitude);
+
+            double deltaLong = longitude2 - longitude1;
+
+            // Calculate Lambda itteratively
+            double SineSigma = 0;
+            double CosineSigma = 0;
+            double sigma = 0;
+            double SineAlpha = 0;
+            double CosineSquareAlpha = 0;
+            double CosineDoubleSigmaM = 0;
+            double CStep = 0;
+
+            double lambda = deltaLong;
+            double PreviousLambda;
+            int i = 0;
+            System.Diagnostics.Debug.WriteLine($"Afore the loop:\n\n\nLambda: {lambda} iteration: {i} \n\n\n");
+
+            do // Using lambda target
+            {
+                i++;
+                SineSigma = Math.Sqrt(Math.Pow((Math.Cos(reducedLat2) * Math.Sin(lambda)), 2) + Math.Pow((Math.Cos(reducedLat1) * Math.Sin(reducedLat2) - Math.Sin(reducedLat1) * Math.Cos(reducedLat2) * Math.Cos(lambda)), 2));
+                if (SineSigma == 0)
+                    return 0;
+                CosineSigma = Math.Sin(reducedLat1) * Math.Sin(reducedLat2) + Math.Cos(reducedLat1) * Math.Cos(reducedLat2) * Math.Cos(lambda);
+
+                sigma = Math.Atan2(SineSigma, CosineSigma);
+
+                SineAlpha = (Math.Cos(reducedLat1) * Math.Cos(reducedLat2) * Math.Sin(lambda)) / SineSigma;
+
+                CosineSquareAlpha = 1 - Math.Pow(SineAlpha, 2);
+
+                CosineDoubleSigmaM = CosineSigma - ((2 * Math.Sin(reducedLat1) * Math.Sin(reducedLat2)) / CosineSquareAlpha);
+
+                CStep = (FLATTENING_OF_ELLIPSOID / 16) * CosineSquareAlpha * (4 + FLATTENING_OF_ELLIPSOID * (4 - (3 * CosineSquareAlpha)));
+
+                PreviousLambda = lambda;
+                lambda = deltaLong + (1 - CStep) * (FLATTENING_OF_ELLIPSOID) * SineAlpha * (sigma + CStep * SineSigma * (CosineDoubleSigmaM + CStep * CosineSigma * ((-1) + 2 * Math.Pow(CosineDoubleSigmaM, 2))));
+                System.Diagnostics.Debug.WriteLine($"\n\n\nLambda: {lambda} iteration: {i} \n\n\n");
+            } while (Math.Abs(lambda - PreviousLambda) > LAMBDA_TARGET);
+
+            // Evaluate the remaining values, now that lambda has reached sufficient accuracy.
+
+            double USquared = CosineSquareAlpha * (Math.Pow(SEMI_MAJOR_AXIS, 2) - Math.Pow(SEMI_MINOR_AXIS, 2)) / Math.Pow(SEMI_MINOR_AXIS, 2);
+
+            double CapitalA = 1 + (USquared / 16384) * (4096 + USquared * (-768 + USquared * (320 - 175 * USquared)));
+            double CapitalB = (USquared / 1024) * (256 + USquared * (-128 + USquared * (74 - 47 * USquared)));
+
+            double deltaSigma = CapitalB * SineSigma * (CosineDoubleSigmaM + (CapitalB / 4) * (CosineSigma * ((-1) + 2 * Math.Pow(CosineDoubleSigmaM, 2)) - (CapitalB / 6) * (CosineDoubleSigmaM) * ((-3) + 4 * Math.Pow(SineSigma, 2)) * ((-3) + 4 * Math.Pow(CosineDoubleSigmaM, 2))));
+
+            double returnValue;
+            if (sigma - deltaSigma == 0)
+                returnValue = SEMI_MINOR_AXIS * CapitalA;
+            else
+                returnValue = SEMI_MINOR_AXIS * CapitalA * (sigma - deltaSigma);
+
+            System.Diagnostics.Debug.WriteLine($"Values: \nUSquared: {USquared}\nCapitalA: {CapitalA}\nCapitalB: {CapitalB}\ndeltaSigma: {deltaSigma}\nSigma: {sigma}");
+            System.Diagnostics.Debug.WriteLine($"Returned Value: {SEMI_MINOR_AXIS * CapitalA * (sigma - deltaSigma)}");
+
+            return returnValue;
+        }
+
+
+        private static double DegreesToRads(double angle)
+        {
+            return angle * Math.PI / 180;
+        }
